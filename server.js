@@ -2,7 +2,15 @@ const express = require('express')
 const cors = require('cors')
 const axios = require('axios')
 
+// REDIS CONFIG
+const Redis = require('redis')
+const client = Redis.createClient({
+    // if url production: redis://redis-server:6379
+    // if not just leave it as is
+})
+
 const app = express()
+app.use(express.urlencoded({ extended: true }))
 app.use(cors())
 
 app.get('/',  async (req, res) => {
