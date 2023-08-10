@@ -15,53 +15,56 @@ app.use(express.urlencoded({ extended: true }))
 app.use(cors())
 
 app.get('/',  async (req, res) => {
-    res.send("Hello Redis NodeJS AAAAB")
+    res.send("Hello Redis NodeJS AAAABA")
 })
+
+// Cache photos data when the server starts
+let cachedPhotos = null;
+
+(async () => {
+    try {
+        const { data } = await axios.get('https://jsonplaceholder.typicode.com/photos');
+        cachedPhotos = data;
+    } catch (error) {
+        console.error('Error fetching initial photos:', error);
+    }
+})();
 
 app.get('/photos', async (req, res) => {
-    const albumId = req.query.albumId;
-    
     try {
-        const { data } = await axios.get(
-            `https://jsonplaceholder.typicode.com/photos`,
-            { params: { albumId } }
-        );
-
-        try {
-            await redisClient.setEx('photos', DEFAULT_EXPIRATION, JSON.stringify(data));
-            res.json(data);
-        } catch (redisError) {
-            console.error('Error in Redis setEx:', redisError);
-            res.status(500).json({ error: 'Internal server error' });
+        if (cachedPhotos) {
+            console.log('Cache Hit');
+            return res.json(cachedPhotos);
+        } else {
+            console.log('Cache Miss');
+            const { data } = await axios.get('https://jsonplaceholder.typicode.com/photos');
+            cachedPhotos = data;
+            return res.json(data);
         }
-    } catch (axiosError) {
-        console.error('Error in axios get:', axiosError);
+    } catch (error) {
+        console.error('Error handling /photos:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-})
+});
 
 app.get('/photos/:id', async (req, res) => {
-    const albumId = req.query.albumId;
-    
     try {
-        const { data } = await axios.get(
-            `https://jsonplaceholder.typicode.com/photos`,
-            { params: { albumId } }
-        );
-
-        // Wrap the Redis operation in a try-catch block
-        try {
-            await redisClient.setEx('photos', DEFAULT_EXPIRATION, JSON.stringify(data));
-        } catch (redisError) {
-            console.error('Error in Redis setEx:', redisError);
+        if (cachedPhotos) {
+            const photo = cachedPhotos.find(photo => photo.id.toString() === req.params.id);
+            if (photo) {
+                console.log('Cache Hit (Individual Photo)');
+                return res.json(photo);
+            }
         }
 
-        res.json(data);
-    } catch (axiosError) {
-        console.error('Error in axios get:', axiosError);
+        console.log('Cache Miss (Individual Photo)');
+        const { data } = await axios.get(`https://jsonplaceholder.typicode.com/photos/${req.params.id}`);
+        return res.json(data);
+    } catch (error) {
+        console.error('Error handling /photos/:id:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
-})
+});
 
 app.listen(3000, () => {
     console.log('Server listening on port: ', 3000)
